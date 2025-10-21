@@ -1,0 +1,46 @@
+from time import sleep
+from adafruit_servokit import ServoKit
+
+# Initialize the ServoKit for 16 channels at address 0x40
+# Note: ServoKit natively supports 16 channels, so for 28 channels you can either:
+#  - Use two boards, each 16 channels, or
+#  - Use a custom driver supporting more than 16 channels
+# Here we'll just attempt channels 0–27; ServoKit will raise an error if a channel doesn't exist.
+kit = ServoKit(channels=16, address=0x17)
+
+# Sweep settings
+MIN_ANGLE = 0
+MAX_ANGLE = 100
+STEP = 10
+DELAY = 0.05
+
+# Define total number of channels to test
+TOTAL_CHANNELS = 28
+
+try:
+    while True:
+        for ch in range(TOTAL_CHANNELS):
+            try:
+                print(f"Testing channel {ch} on address 0x40")
+
+                # Sweep up
+                for angle in range(MIN_ANGLE, MAX_ANGLE + 1, STEP):
+                    kit.servo[ch].angle = angle
+                    sleep(DELAY)
+
+                # Sweep down
+                for angle in range(MAX_ANGLE, MIN_ANGLE - 1, -STEP):
+                    kit.servo[ch].angle = angle
+                    sleep(DELAY)
+
+            except (IndexError, AttributeError):
+                # Channel doesn't exist on this board; skip
+                print(f"  Channel {ch} does not exist, skipping.")
+
+except KeyboardInterrupt:
+    print("\nStopping test. Returning all valid servos to MIN_ANGLE.")
+    for ch in range(TOTAL_CHANNELS):
+        try:
+            kit.servo[ch].angle = MIN_ANGLE
+        except (IndexError, AttributeError):
+            continue

@@ -1,0 +1,36 @@
+import time
+from adafruit_pca9685 import PCA9685
+from board import SCL, SDA
+import busio
+
+# Initialize I2C bus
+i2c = busio.I2C(SCL, SDA)
+
+# Create PCA9685 instance
+pca = PCA9685(i2c)
+pca.frequency = 50  # typical servo frequency
+
+def set_servo_pulse(channel, pulse_us):
+    pulse_length = 1000000 / 50 / 4096  # µs per bit (for 50 Hz)
+    value = int(pulse_us / pulse_length)
+    pca.channels[channel].duty_cycle = value
+
+try:
+    while True:
+        for ch in range(16):
+            print(f"Testing channel {ch}...")
+            # Move servo forward a bit
+            set_servo_pulse(ch, 1600)
+            time.sleep(0.7)
+            # Move servo backward a bit
+            set_servo_pulse(ch, 1400)
+            time.sleep(0.7)
+            # Stop (center)
+            set_servo_pulse(ch, 1500)
+            time.sleep(0.5)
+        print("One full sweep done — looping again.\n")
+        time.sleep(2)
+
+except KeyboardInterrupt:
+    print("Stopping test.")
+    pca.deinit()

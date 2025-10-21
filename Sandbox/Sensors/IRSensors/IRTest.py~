@@ -1,0 +1,21 @@
+from gpiozero import DigitalInputDevice
+from time import sleep
+
+# Initialize the IR sensors on GPIO pins ? and 16
+ir_sensor_1 = DigitalInputDevice(16)
+ir_sensor_2 = DigitalInputDevice(21)
+
+print("IR Sensor Test (GPIO ? & 16)")
+print("-----------------------------")
+print("Reading sensors in real-time. Press Ctrl+C to stop.\n")
+
+try:
+    while True:
+        sensor_1_state = "LIGHT" if ir_sensor_1.value else "DARK"
+        sensor_2_state = "LIGHT" if ir_sensor_2.value else "DARK"
+
+        print(f"Sensor 1 (GPIO 16): {sensor_1_state} | Sensor 2 (GPIO ?): {sensor_2_state}")
+        sleep(0.2)  # Update every 200ms
+
+except KeyboardInterrupt:
+    print("\nTest stopped by user.")

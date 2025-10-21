@@ -1,0 +1,68 @@
+# motor_pin_tester_all_pins.py
+
+import lgpio
+import time
+import itertools
+import json
+import os
+
+# GPIO setup
+h = lgpio.gpiochip_open(0)
+
+# Motor pins
+IN1 = 16
+IN2 = 21
+ENA = 19
+IN3 = 13
+IN4 = 20
+ENB = 26
+
+motor_pins = [IN1, IN2, ENA, IN3, IN4, ENB]
+
+# Claim pins as outputs
+for pin in motor_pins:
+    lgpio.gpio_claim_output(h, pin)
+
+# JSON file to save progress
+PROGRESS_FILE = "tested_combos.json"
+
+# Load progress if file exists
+def load_progress():
+    if os.path.exists(PROGRESS_FILE):
+        with open(PROGRESS_FILE, "r") as f:
+            return json.load(f)
+    return []
+
+# Save progress to JSON
+def save_progress(tested_combos):
+    with open(PROGRESS_FILE, "w") as f:
+        json.dump(tested_combos, f)
+
+# Apply HIGH/LOW combination to pins
+def apply_combination(combo):
+    for i, pin in enumerate(motor_pins):
+        lgpio.gpio_write(h, pin, combo[i])
+
+# Generate all combinations of HIGH/LOW for 6 pins
+all_combos = list(itertools.product([0, 1], repeat=len(motor_pins)))
+tested_combos = load_progress()
+
+# Filter out already tested combinations
+combos_to_test = [c for c in all_combos if list(c) not in tested_combos]
+
+try:
+    for combo in combos_to_test:
+        print(f"Testing pins: {combo}")
+        apply_combination(combo)
+        time.sleep(1)  # Hold state for 1 second
+
+        # Save progress
+        tested_combos.append(list(combo))
+        save_progress(tested_combos)
+
+finally:
+    # Stop all motors at the end
+    for pin in motor_pins:
+        lgpio.gpio_write(h, pin, 0)
+    lgpio.gpiochip_close(h)
+    print("Test complete, motors stopped.")
