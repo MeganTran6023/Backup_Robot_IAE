@@ -1,0 +1,259 @@
+"""
+Full Robot Control + Ultrasonic + Servo + Live Camera Stream
+-----------------------------------------------------------
+- DC motors: forward/backward/turn
+- Ultrasonic sensor: continuous distance measurement
+- IR sensors: GPIO 16 & 21
+- Servos:
+    - Channels 12–15: random throttle motion
+    - Channels 0 & 1: smooth continuous random sweep
+- Camera stream via Flask, auto-opens in Chromium
+Press Ctrl+C to stop safely.
+"""
+
+import time
+import random
+import threading
+import os
+import cv2
+from flask import Flask, Response
+import lgpio as GPIO
+from adafruit_servokit import ServoKit
+import RPi.GPIO as RPiGPIO
+from gpiozero import DigitalInputDevice
+
+# ============================================================
+# DC MOTORS
+# ============================================================
+DIR1, PWM1 = 17, 18
+DIR2, PWM2 = 22, 23
+
+RPiGPIO.setmode(RPiGPIO.BCM)
+RPiGPIO.setup(DIR1, RPiGPIO.OUT)
+RPiGPIO.setup(PWM1, RPiGPIO.OUT)
+RPiGPIO.setup(DIR2, RPiGPIO.OUT)
+RPiGPIO.setup(PWM2, RPiGPIO.OUT)
+
+pwm1 = RPiGPIO.PWM(PWM1, 1000)
+pwm2 = RPiGPIO.PWM(PWM2, 1000)
+pwm1.start(0)
+pwm2.start(0)
+
+def wheel_loop():
+    try:
+        while True:
+            print("🚗 Forward")
+            RPiGPIO.output(DIR1, RPiGPIO.HIGH)
+            RPiGPIO.output(DIR2, RPiGPIO.HIGH)
+            pwm1.ChangeDutyCycle(60)
+            pwm2.ChangeDutyCycle(60)
+            time.sleep(3)
+
+            print("🛑 Stop")
+            pwm1.ChangeDutyCycle(0)
+            pwm2.ChangeDutyCycle(0)
+            time.sleep(1)
+
+            print("🔙 Backward")
+            RPiGPIO.output(DIR1, RPiGPIO.LOW)
+            RPiGPIO.output(DIR2, RPiGPIO.LOW)
+            pwm1.ChangeDutyCycle(60)
+            pwm2.ChangeDutyCycle(60)
+            time.sleep(3)
+
+            print("🛑 Stop")
+            pwm1.ChangeDutyCycle(0)
+            pwm2.ChangeDutyCycle(0)
+            time.sleep(1)
+
+            print("↪️ Turn Left")
+            RPiGPIO.output(DIR1, RPiGPIO.LOW)
+            RPiGPIO.output(DIR2, RPiGPIO.HIGH)
+            pwm1.ChangeDutyCycle(60)
+            pwm2.ChangeDutyCycle(60)
+            time.sleep(2)
+
+            print("↩️ Turn Right")
+            RPiGPIO.output(DIR1, RPiGPIO.HIGH)
+            RPiGPIO.output(DIR2, RPiGPIO.LOW)
+            pwm1.ChangeDutyCycle(60)
+            pwm2.ChangeDutyCycle(60)
+            time.sleep(2)
+
+            print("🛑 Stop")
+            pwm1.ChangeDutyCycle(0)
+            pwm2.ChangeDutyCycle(0)
+            time.sleep(1)
+    except Exception as e:
+        print(f"Wheel loop error: {e}")
+
+# ============================================================
+# ULTRASONIC SENSOR
+# ============================================================
+TRIG, ECHO = 26, 6
+h = GPIO.gpiochip_open(0)
+GPIO.gpio_claim_output(h, TRIG)
+GPIO.gpio_claim_input(h, ECHO)
+
+def get_distance():
+    GPIO.gpio_write(h, TRIG, 0)
+    time.sleep(0.05)
+    GPIO.gpio_write(h, TRIG, 1)
+    time.sleep(0.00001)
+    GPIO.gpio_write(h, TRIG, 0)
+
+    pulse_start = time.time()
+    timeout = pulse_start + 0.05
+
+    while GPIO.gpio_read(h, ECHO) == 0:
+        pulse_start = time.time()
+        if time.time() > timeout:
+            return None
+
+    while GPIO.gpio_read(h, ECHO) == 1:
+        pulse_end = time.time()
+        if time.time() > timeout:
+            return None
+
+    duration = pulse_end - pulse_start
+    distance = duration * 17150
+    return round(distance, 2)
+
+def ultrasonic_loop():
+    try:
+        while True:
+            d = get_distance()
+            if d:
+                print(f"📏 Distance: {d} cm")
+            else:
+                print("⚠️ Ultrasonic timeout")
+            time.sleep(0.5)
+    except Exception as e:
+        print(f"Ultrasonic loop error: {e}")
+
+# ============================================================
+# IR SENSORS
+# ============================================================
+ir1 = DigitalInputDevice(16)
+ir2 = DigitalInputDevice(21)
+
+def ir_loop():
+    try:
+        while True:
+            s1 = "LIGHT" if ir1.value else "DARK"
+            s2 = "LIGHT" if ir2.value else "DARK"
+            print(f"👁️ IR1(GPIO16): {s1} | IR2(GPIO21): {s2}")
+            time.sleep(0.3)
+    except Exception as e:
+        print(f"IR loop error: {e}")
+
+# ============================================================
+# SERVOS
+# ============================================================
+kit = ServoKit(channels=16)
+RANDOM_CHANNELS = [12, 13, 14, 15]
+CONTINUOUS_CHANNELS = [0, 1]
+
+def random_throttle():
+    return round(random.uniform(-1, 1), 2)
+
+def random_duration():
+    return round(random.uniform(0.2, 2.5), 2)
+
+def servo_random_loop():
+    try:
+        while True:
+            active = random.sample(RANDOM_CHANNELS, random.randint(1, len(RANDOM_CHANNELS)))
+            print(f"\n⚙️ Random servos: {active}")
+            for ch in active:
+                t = random_throttle()
+                kit.continuous_servo[ch].throttle = t
+                print(f"  Servo {ch}: throttle={t}")
+            time.sleep(random_duration())
+    except Exception as e:
+        print(f"Servo loop error: {e}")
+
+def smooth_random_sweep(ch, step=0.05, delay=0.05):
+    current = 0.0
+    kit.continuous_servo[ch].throttle = current
+    try:
+        while True:
+            target = random.uniform(-1, 1)
+            while abs(current - target) > step:
+                current += step if current < target else -step
+                kit.continuous_servo[ch].throttle = current
+                time.sleep(delay)
+            current = target
+            kit.continuous_servo[ch].throttle = current
+            time.sleep(delay)
+    except Exception as e:
+        print(f"Smooth servo {ch} error: {e}")
+
+# ============================================================
+# FLASK CAMERA STREAM
+# ============================================================
+app = Flask(__name__)
+camera = cv2.VideoCapture(0)
+
+def generate_frames():
+    while True:
+        success, frame = camera.read()
+        if not success:
+            break
+        _, buffer = cv2.imencode('.jpg', frame)
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+
+@app.route('/')
+def index():
+    return '<h2>📷 USB Camera Stream</h2><img src="/video_feed" width="640" height="480">'
+
+@app.route('/video_feed')
+def video_feed():
+    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+def open_chromium():
+    time.sleep(2)
+    print("🌐 Launching Chromium browser...")
+    os.system("chromium-browser http://127.0.0.1:8000 &")
+
+def flask_loop():
+    threading.Thread(target=open_chromium, daemon=True).start()
+    app.run(host='0.0.0.0', port=8000, threaded=True)
+
+# ============================================================
+# MAIN PROGRAM
+# ============================================================
+if __name__ == "__main__":
+    try:
+        print("🎯 Starting All Systems")
+        print("Press Ctrl+C to stop.\n")
+
+        threads = [
+            threading.Thread(target=wheel_loop, daemon=True),
+            threading.Thread(target=ultrasonic_loop, daemon=True),
+            threading.Thread(target=ir_loop, daemon=True),
+            threading.Thread(target=servo_random_loop, daemon=True),
+            threading.Thread(target=lambda: smooth_random_sweep(0), daemon=True),
+            threading.Thread(target=lambda: smooth_random_sweep(1), daemon=True),
+            threading.Thread(target=flask_loop, daemon=True),
+        ]
+
+        for t in threads:
+            t.start()
+
+        while True:
+            time.sleep(1)
+
+    except KeyboardInterrupt:
+        print("\n🛑 Shutting down...")
+
+    finally:
+        pwm1.stop()
+        pwm2.stop()
+        RPiGPIO.cleanup()
+        for ch in RANDOM_CHANNELS + CONTINUOUS_CHANNELS:
+            kit.continuous_servo[ch].throttle = 0
+        GPIO.gpiochip_close(h)
+        camera.release()
+        print("✅ Clean exit. All systems stopped.")
