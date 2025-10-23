@@ -1,0 +1,31 @@
+import threading
+import random
+from time import sleep
+from adafruit_servokit import ServoKit
+
+# Initialize the kit (16-channel board)
+kit = ServoKit(channels=16)
+
+def random_sweep(ch):
+    """Continuously sweep a servo channel to random throttle values between -1 and 1."""
+    while True:
+        t = random.uniform(-1, 1)  # Random throttle
+        kit.continuous_servo[ch].throttle = t
+        sleep(0.1)  # Adjust speed of changes here
+
+# Create threads for both servos
+thread0 = threading.Thread(target=random_sweep, args=(0,), daemon=True)
+thread1 = threading.Thread(target=random_sweep, args=(1,), daemon=True)
+
+# Start threads
+thread0.start()
+thread1.start()
+
+# Keep the main program running
+try:
+    while True:
+        sleep(1)
+except KeyboardInterrupt:
+    kit.continuous_servo[0].throttle = 0
+    kit.continuous_servo[1].throttle = 0
+    print("\n🛑 Stopped all servos safely.")
