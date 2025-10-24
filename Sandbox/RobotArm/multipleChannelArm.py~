@@ -29,7 +29,7 @@ try:
             kit.continuous_servo[ch].throttle = 0
         sleep(0.5)
 
-        print("→ Rotating all clockwise")
+        print("→ Rotating all clockwise (full speed)")
         for ch in channels:
             kit.continuous_servo[ch].throttle = 1
         sleep(1)
@@ -39,9 +39,9 @@ try:
             kit.continuous_servo[ch].throttle = 0
         sleep(0.5)
 
-        print("→ Rotating all counter-clockwise")
+        print("→ Rotating all counter-clockwise (half speed)")
         for ch in channels:
-            kit.continuous_servo[ch].throttle = -1
+            kit.continuous_servo[ch].throttle = -0.5
         sleep(1)
 
         print("→ Stopping all again")
