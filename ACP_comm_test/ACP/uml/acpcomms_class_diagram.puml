@@ -1,0 +1,61 @@
+@startuml ACP Communications Library
+
+!define ABSTRACT_CLASS abstract class
+
+' Abstract Base Class
+abstract class ACPComms {
+  + {abstract} configure(configuration: Dict[str, Any]): void
+  + {abstract} connect(): void
+  + {abstract} disconnect(): void
+  + isConnected(): bool
+  + getConfig(): Dict[str, Any]
+}
+
+' Messenger Implementation
+class Messenger {
+  + configure(configuration: Dict[str, Any]): void
+  + connect(): void
+  + disconnect(): void
+  + sendMessage(message: bytes): void
+  + sendMessageString(message: str): void
+  + receiveMessage(): bytes
+  + receiveMessageString(): str
+  + setMessageHandler(handler: Callable): void
+  + startListener(): void
+  + stopListener(): void
+}
+
+' DatagramPacket Helper Class
+class DatagramPacket {
+  + getData(): bytes
+  + getAddress(): Tuple[str, int]
+  + getLength(): int
+}
+
+' Streamer Implementation
+class Streamer {
+  + configure(configuration: Dict[str, Any]): void
+  + connect(): void
+  + disconnect(): void
+  + sendData(data: bytes): void
+  + sendDataString(data: str): void
+  + receiveData(): DatagramPacket
+  + setPacketHandler(handler: Callable): void
+  + startListener(): void
+  + stopListener(): void
+  + getAddress(): str
+  + getPort(): int
+}
+
+' Relationships
+ACPComms <|-- Messenger : extends
+ACPComms <|-- Streamer : extends
+Streamer ..> DatagramPacket : uses
+
+note left of DatagramPacket
+  Helper class mimicking
+  Java's DatagramPacket
+  for API compatibility
+end note
+
+@enduml

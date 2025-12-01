@@ -1,0 +1,47 @@
+@startuml
+
+class platform_application {
+  application that controls
+  robot/drone system
+}
+
+class robot_platform_lib {
+  platform specific 
+  library for using 
+  robot/drone subsystems
+  and sensors
+}
+
+class comms_lib {
+  java, python, c++
+  common communication library 
+  developed by IAE... example 
+  methods are listed below
+  ==
+  + message_config(message_template)
+  + message_connect(topic)
+  + message_disconnect(topic)
+  + stream_connect(udp_port..)
+  + stream_listen(udp_port..)
+  + stream_disconnect()
+  + write_message(message)
+  + read_message()
+}
+
+class plugin {
+  no code plug in used to 
+  communicate with deployed 
+  devices
+}
+
+class dash {
+  data aggregation system hub
+}
+
+platform_application ..> robot_platform_lib : uses
+platform_application ..> comms_lib : uses
+
+dash..> plugin : uses
+plugin ..> comms_lib : uses
+
+@enduml
