@@ -2,8 +2,6 @@
 # encoding:utf-8
 
 import sys
-sys.path.append('/home/megan/MasterPi/')
-
 import time
 import zlib
 import threading
@@ -126,13 +124,23 @@ class Camera:
 # ================= STREAMER CONFIG =================
 CHUNK_SIZE = 65000 - 4
 
-streamer = Streamer()
-streamer.configure({
+# Video streamer on port 9998
+video_streamer = Streamer()
+video_streamer.configure({
     "host": "192.168.1.209",
-    "port": 9990,
+    "port": 9998,  # Changed from 9999
     "bufferSize": 65535
 })
-streamer.connect()
+video_streamer.connect()
+
+# Metadata streamer on port 9999
+metadata_streamer = Streamer()
+metadata_streamer.configure({
+    "host": "192.168.1.209",
+    "port": 9999,  # Metadata only
+    "bufferSize": 65535
+})
+metadata_streamer.connect()
 
 # ================= HELPERS =================
 def get_color_status(camera: Camera):
@@ -149,7 +157,7 @@ def metadata_loop(camera: Camera):
             "status": "active",
             "colors_detected": get_color_status(camera)
         }
-        streamer.sendBson(payload)
+        metadata_streamer.sendBson(payload)  # Keep original method
         time.sleep(5)
 
 # ================= STREAM THREAD =================
@@ -171,7 +179,7 @@ def stream_loop(camera: Camera):
 
         data = jpeg.tobytes()
         for i in range(0, len(data), CHUNK_SIZE):
-            streamer.sendChunkWithChecksum(data[i:i + CHUNK_SIZE])
+            video_streamer.sendChunkWithChecksum(data[i:i + CHUNK_SIZE])
 
         time.sleep(0.03)
 
@@ -192,5 +200,6 @@ if __name__ == "__main__":
                 break
 
     my_camera.camera_close()
-    streamer.disconnect()
+    video_streamer.disconnect()
+    metadata_streamer.disconnect()
     cv2.destroyAllWindows()
